@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tool — AI Creator Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23a855f7'/%3E%3Cstop offset='1' stop-color='%233b82f6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='16' fill='url(%23g)'/%3E%3Cpath d='M32 10l6.3 16.2L55 32l-16.7 5.8L32 54l-6.3-16.2L9 32l16.7-5.8z' fill='white' fill-opacity='0.92'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <div class="tool-layout">
+      <aside class="tool-sidebar" aria-label="Tools">
+        <a href="index.html" class="logo">
+          <span class="logo-mark">✦</span>
+          AI Creator Studio
+        </a>
+        <nav class="sidebar-nav" id="sidebar-nav">
+          <a href="#viral-ideas" class="sidebar-link" data-panel="viral-ideas">Viral Ideas</a>
+          <a href="#hooks" class="sidebar-link" data-panel="hooks">Hooks Generator</a>
+          <a href="#trends" class="sidebar-link" data-panel="trends">Trend Detector</a>
+          <a href="#competitor" class="sidebar-link" data-panel="competitor">Competitor Analyzer</a>
+          <a href="#caption" class="sidebar-link active" data-panel="caption" aria-current="page">Caption Generator</a>
+          <a href="#hashtags" class="sidebar-link" data-panel="hashtags">Hashtag Generator</a>
+        </nav>
+      </aside>
+
+      <div class="tool-main">
+        <header class="tool-topbar">
+          <a href="index.html" class="logo">
+            <span class="logo-mark">✦</span>
+            AI Creator Studio
+          </a>
+          <div class="tool-topbar-actions">
+            <div class="google-auth-slot" aria-label="Google account"></div>
+            <a href="index.html" class="btn btn-ghost tool-topbar-home">Home</a>
+          </div>
+        </header>
+
+        <div class="mobile-panel-bar">
+          <label class="mobile-panel-label" for="mobile-panel-select">Tool</label>
+          <select id="mobile-panel-select" class="input-select mobile-panel-select" aria-label="Choose tool">
+            <option value="viral-ideas">Viral Ideas</option>
+            <option value="hooks">Hooks Generator</option>
+            <option value="trends">Trend Detector</option>
+            <option value="competitor">Competitor Analyzer</option>
+            <option value="caption" selected>Caption Generator</option>
+            <option value="hashtags">Hashtag Generator</option>
+          </select>
+        </div>
+
+        <p class="mobile-nav-hint">
+          Use the sidebar on desktop or the menu above on mobile to switch tools. Optional images up to <strong>50 MB</strong>.
+        </p>
+
+        <main class="tool-content">
+          <div class="tool-global-controls" id="tool-global-controls">
+            <div class="tool-global-row">
+              <div class="input-group tool-global-field" id="global-style-wrap">
+                <label for="global-style">Tone</label>
+                <select id="global-style" class="input-select">
+                  <option value="viral">Viral</option>
+                  <option value="emotional">Emotional</option>
+                  <option value="funny">Funny</option>
+                  <option value="luxury">Luxury</option>
+                  <option value="minimal">Minimal</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Viral Ideas: platform → 5 cards (no classic topic form) -->
+          <section id="panel-viral-ideas" class="tool-panel" aria-labelledby="title-viral-ideas">
+            <div class="generator-panel vi-panel">
+              <h1 id="title-viral-ideas">Viral Ideas</h1>
+              <p class="sub">
+                Pick a platform first. You’ll get <strong>5 ready-to-use concepts</strong> with a hook, short brief, format, and score —
+                then jump into the full <strong>Caption Generator</strong> with one click.
+              </p>
+              <p id="vi-error" class="form-error" role="alert" hidden></p>
+
+              <div id="vi-step-platform" class="vi-step">
+                <h2 class="vi-section-title">Choose platform</h2>
+                <div class="platform-btn-row" role="group" aria-label="Social platform">
+                  <button type="button" class="btn btn-platform" data-platform="instagram">Instagram</button>
+                  <button type="button" class="btn btn-platform" data-platform="tiktok">TikTok</button>
+                  <button type="button" class="btn btn-platform" data-platform="youtube_shorts">YouTube Shorts</button>
+                  <button type="button" class="btn btn-platform" data-platform="linkedin">LinkedIn</button>
+                  <button type="button" class="btn btn-platform" data-platform="x">X</button>
+                </div>
+              </div>
+
+              <div id="vi-step-ideas" class="vi-step" hidden>
+                <div class="vi-ideas-toolbar">
+                  <button type="button" id="vi-change-platform" class="btn btn-ghost">← Change platform</button>
+                  <p class="vi-platform-label" id="vi-platform-label"></p>
+                </div>
+                <div id="vi-cards" class="vi-cards" aria-live="polite"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Hooks generator -->
+          <section id="panel-hooks" class="tool-panel" aria-labelledby="title-hooks">
+            <div class="generator-panel">
+              <h1 id="title-hooks">Hooks Generator</h1>
+              <p class="sub">
+                Enter a topic, pick a platform and tone. We’ll suggest <strong>10 hooks</strong> — copy any line or tap
+                <strong>Use</strong> to open the Caption Generator with that line.
+              </p>
+              <form id="form-hooks" novalidate>
+                <div class="input-group">
+                  <label for="hk-topic">Topic</label>
+                  <textarea
+                    id="hk-topic"
+                    rows="2"
+                    placeholder="e.g. fitness, side income, coffee shop…"
+                    required
+                  ></textarea>
+                </div>
+                <div class="input-group">
+                  <span class="input-label-text">Platform</span>
+                  <div class="hk-opt-row" id="hk-platform-row" role="group" aria-label="Platform">
+                    <button type="button" class="btn hk-opt active" data-hk-platform="instagram">Instagram</button>
+                    <button type="button" class="btn hk-opt" data-hk-platform="tiktok">TikTok</button>
+                    <button type="button" class="btn hk-opt" data-hk-platform="youtube_shorts">YouTube Shorts</button>
+                    <button type="button" class="btn hk-opt" data-hk-platform="x">X</button>
+                    <button type="button" class="btn hk-opt" data-hk-platform="linkedin">LinkedIn</button>
+                  </div>
+                </div>
+                <div class="input-group">
+                  <span class="input-label-text">Tone</span>
+                  <div class="hk-opt-row" id="hk-tone-row" role="group" aria-label="Tone">
+                    <button type="button" class="btn hk-opt active" data-hk-tone="viral">Viral</button>
+                    <button type="button" class="btn hk-opt" data-hk-tone="educational">Educational</button>
+                    <button type="button" class="btn hk-opt" data-hk-tone="shocking">Shocking</button>
+                    <button type="button" class="btn hk-opt" data-hk-tone="story">Story</button>
+                  </div>
+                </div>
+                <p id="hk-error" class="form-error" role="alert" hidden></p>
+                <div class="generate-wrap">
+                  <button type="submit" class="btn btn-primary btn-block">Generate</button>
+                </div>
+              </form>
+              <div id="hk-results" class="results" aria-live="polite">
+                <div class="result-block">
+                  <h3>Hooks (10)</h3>
+                  <div id="hk-hooks-list" class="hk-hooks-list"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Trend Detector -->
+          <section id="panel-trends" class="tool-panel" aria-labelledby="title-trends">
+            <div class="generator-panel">
+              <h1 id="title-trends">Trend Detector</h1>
+              <p class="sub">
+                Pick a platform and category, then tap <strong>Get trends</strong> for <strong>5–8 trend cards</strong> with angles you can film today.
+                Use <strong>Create with this trend</strong> to jump to the Caption Generator with the title prefilled.
+              </p>
+              <form id="form-trends" novalidate>
+                <div class="input-group">
+                  <span class="input-label-text">Platform</span>
+                  <div class="hk-opt-row" id="tr-platform-row" role="group" aria-label="Platform">
+                    <button type="button" class="btn hk-opt active" data-tr-platform="instagram">Instagram</button>
+                    <button type="button" class="btn hk-opt" data-tr-platform="tiktok">TikTok</button>
+                    <button type="button" class="btn hk-opt" data-tr-platform="youtube_shorts">YouTube Shorts</button>
+                    <button type="button" class="btn hk-opt" data-tr-platform="x">X</button>
+                    <button type="button" class="btn hk-opt" data-tr-platform="linkedin">LinkedIn</button>
+                  </div>
+                </div>
+                <div class="input-group">
+                  <span class="input-label-text">Category</span>
+                  <div class="hk-opt-row" id="tr-category-row" role="group" aria-label="Category">
+                    <button type="button" class="btn hk-opt active" data-tr-category="fitness">Fitness</button>
+                    <button type="button" class="btn hk-opt" data-tr-category="business">Business</button>
+                    <button type="button" class="btn hk-opt" data-tr-category="motivation">Motivation</button>
+                    <button type="button" class="btn hk-opt" data-tr-category="ai">AI</button>
+                    <button type="button" class="btn hk-opt" data-tr-category="beauty">Beauty</button>
+                  </div>
+                </div>
+                <p id="tr-error" class="form-error" role="alert" hidden></p>
+                <div class="generate-wrap">
+                  <button type="submit" class="btn btn-primary btn-block">Get trends</button>
+                </div>
+              </form>
+              <div id="tr-results" class="results" aria-live="polite">
+                <div class="result-block">
+                  <h3>Trends</h3>
+                  <div id="tr-trends-list" class="tr-trends-list"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Competitor -->
+          <section id="panel-competitor" class="tool-panel" aria-labelledby="title-competitor">
+            <div class="generator-panel">
+              <h1 id="title-competitor">Competitor Analyzer</h1>
+              <p class="sub">
+                Choose where they post, then add their handle or link. The readout is framed for that platform (illustrative only — no live account access).
+              </p>
+              <form id="form-competitor" novalidate>
+                <div class="input-group">
+                  <label for="cp-competitor">Enter competitor username or profile link (e.g. @username)</label>
+                  <input
+                    type="text"
+                    id="cp-competitor"
+                    class="input-text"
+                    placeholder="@username or profile URL"
+                    required
+                    autocomplete="off"
+                  />
+                </div>
+                <div class="input-group">
+                  <label for="cp-context">Your niche or goal (optional)</label>
+                  <textarea
+                    id="cp-context"
+                    rows="2"
+                    placeholder="e.g. fitness page, make money content"
+                  ></textarea>
+                </div>
+                <div class="input-group">
+                  <span class="input-label-text">Platform</span>
+                  <div class="hk-opt-row" id="cp-platform-row" role="group" aria-label="Platform">
+                    <button type="button" class="btn hk-opt" data-cp-platform="instagram">Instagram</button>
+                    <button type="button" class="btn hk-opt" data-cp-platform="tiktok">TikTok</button>
+                    <button type="button" class="btn hk-opt" data-cp-platform="youtube">YouTube</button>
+                    <button type="button" class="btn hk-opt" data-cp-platform="x">X</button>
+                    <button type="button" class="btn hk-opt" data-cp-platform="linkedin">LinkedIn</button>
+                  </div>
+                </div>
+                <p id="cp-error" class="form-error" role="alert" hidden></p>
+                <div class="generate-wrap">
+                  <button type="submit" class="btn btn-primary btn-block">Analyze</button>
+                </div>
+              </form>
+              <div id="cp-results" class="results" aria-live="polite">
+                <div class="result-block">
+                  <h3>Summary</h3>
+                  <p id="cp-summary" class="competitor-text"></p>
+                </div>
+                <div class="result-block">
+                  <h3>Strengths</h3>
+                  <ul id="cp-strengths" class="result-list"></ul>
+                </div>
+                <div class="result-block">
+                  <h3>Gaps / opportunities</h3>
+                  <ul id="cp-gaps" class="result-list"></ul>
+                </div>
+                <div class="result-block">
+                  <h3>Content angles for you</h3>
+                  <ul id="cp-angles" class="result-list"></ul>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Caption = full pack -->
+          <section id="panel-caption" class="tool-panel is-active" aria-labelledby="title-caption">
+            <div class="generator-panel">
+              <h1 id="title-caption">Caption Generator</h1>
+              <p class="sub">
+                Full pack: <strong>hooks, captions, optimized line, hashtags, reel script, viral score</strong>. Topic
+                <em>or</em> image — image clears the topic field when uploaded.
+              </p>
+
+              <form id="generator-form" novalidate>
+                <div class="input-group">
+                  <label for="topic-input">Topic</label>
+                  <textarea
+                    id="topic-input"
+                    name="topic"
+                    rows="4"
+                    placeholder="e.g. Fitness motivation, coffee shop launch, summer sale…"
+                  ></textarea>
+                </div>
+
+                <div class="input-group">
+                  <span class="input-label-text">Image (optional)</span>
+                  <p class="field-hint">
+                    <strong>Max 50 MB.</strong> Optional — add a photo to tailor hooks and captions to your visual.
+                  </p>
+                  <div class="upload-actions" role="group" aria-label="Image upload">
+                    <input type="file" id="image-input" name="image" accept="image/*" class="input-file-native" tabindex="-1" />
+                    <label for="image-input" class="btn-upload btn-upload-primary" tabindex="0">
+                      <span class="btn-upload-icon" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                      </span>
+                      Upload image
+                    </label>
+                    <button type="button" id="image-clear" class="btn-upload btn-upload-secondary">Remove image</button>
+                  </div>
+                  <div id="image-preview" class="image-preview" hidden>
+                    <img id="image-preview-img" src="" alt="" />
+                  </div>
+                </div>
+
+                <p id="form-error" class="form-error" role="alert" hidden></p>
+
+                <div class="generate-wrap">
+                  <button type="submit" class="btn btn-primary btn-block">Generate</button>
+                </div>
+              </form>
+
+              <div id="results" class="results" aria-live="polite">
+                <div class="result-block">
+                  <h3>Hooks (5)</h3>
+                  <ul id="out-hooks" class="result-list"></ul>
+                </div>
+                <div class="result-block">
+                  <h3>Captions (5)</h3>
+                  <ul id="out-captions" class="result-list"></ul>
+                </div>
+                <div class="result-block" id="out-optimized-wrap" hidden>
+                  <h3>Optimized caption</h3>
+                  <p id="out-optimized" class="optimized-caption-text"></p>
+                </div>
+                <div class="result-block">
+                  <h3>Hashtags (10)</h3>
+                  <div id="out-hashtags" class="hashtag-row"></div>
+                </div>
+                <div class="result-block">
+                  <h3>Reel script (1)</h3>
+                  <pre id="out-reel" class="reel-script"></pre>
+                </div>
+                <div class="result-block">
+                  <h3>Viral score</h3>
+                  <div class="viral-score-box">
+                    <div class="score-circle" aria-hidden="true">
+                      <div class="score-circle-inner"><span id="out-score">—</span></div>
+                    </div>
+                    <p id="out-score-note" style="margin: 0; color: var(--text-muted); max-width: 28rem"></p>
+                  </div>
+                </div>
+                <div class="result-block" id="pack-export-block">
+                  <h3>Export</h3>
+                  <div class="pack-export-row">
+                    <button type="button" id="export-current-json" class="btn btn-ghost">Export JSON</button>
+                    <button type="button" id="export-current-txt" class="btn btn-ghost">Export TXT</button>
+                  </div>
+                  <div class="pack-export-row" style="margin-top: 0.9rem;">
+                    <button type="button" id="upgrade-pro-btn" class="btn btn-primary btn-block">
+                      Upgrade to Pro ($19/mo)
+                    </button>
+                  </div>
+                  <p class="field-hint" style="margin-top: 10px;">
+                    Export downloads the latest generation you created.
+                  </p>
+                </div>
+                <div class="result-block" id="pack-history-block">
+                  <h3>History</h3>
+                  <div class="pack-export-row">
+                    <button type="button" id="history-load-btn" class="btn btn-ghost">Load recent</button>
+                    <button type="button" id="history-export-json" class="btn btn-ghost">Export history JSON</button>
+                  </div>
+                  <ul id="pack-history-list" class="result-list"></ul>
+                  <p id="pack-history-hint" class="field-hint" style="margin-top: 10px;">
+                    Sign in with Google to load your saved generations.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Hashtags — topic + platform, mock viral / niche / trend mix -->
+          <section id="panel-hashtags" class="tool-panel" aria-labelledby="title-hashtags">
+            <div class="generator-panel">
+              <h1 id="title-hashtags">Hashtag Generator</h1>
+              <p class="sub">
+                Enter a topic and platform. You get a ready-made blend of <strong>viral</strong>, <strong>niche</strong>, and
+                <strong>trend</strong> hashtags (15–20 total) — copy everything in one tap.
+              </p>
+              <form id="form-hashtags" novalidate>
+                <div class="input-group">
+                  <label for="ht-topic">Enter topic</label>
+                  <textarea id="ht-topic" rows="2" placeholder="e.g. fitness motivation" required></textarea>
+                </div>
+                <div class="input-group">
+                  <span class="input-label-text">Platform</span>
+                  <div class="hk-opt-row" id="ht-platform-row" role="group" aria-label="Platform">
+                    <button type="button" class="btn hk-opt" data-ht-platform="instagram">Instagram</button>
+                    <button type="button" class="btn hk-opt" data-ht-platform="tiktok">TikTok</button>
+                    <button type="button" class="btn hk-opt" data-ht-platform="youtube_shorts">YouTube Shorts</button>
+                    <button type="button" class="btn hk-opt" data-ht-platform="x">X</button>
+                    <button type="button" class="btn hk-opt" data-ht-platform="linkedin">LinkedIn</button>
+                  </div>
+                </div>
+                <p id="ht-error" class="form-error" role="alert" hidden></p>
+                <div class="generate-wrap">
+                  <button type="submit" class="btn btn-primary btn-block">Generate Hashtags</button>
+                </div>
+              </form>
+              <div id="ht-results" class="results" aria-live="polite">
+                <div class="result-block ht-strip-block">
+                  <div class="ht-strip-row">
+                    <p id="ht-all-inline" class="ht-all-inline"></p>
+                    <button type="button" id="ht-copy-all" class="btn btn-ghost ht-copy-all-btn">Copy All</button>
+                  </div>
+                </div>
+                <div class="result-block">
+                  <h3>Viral Hashtags</h3>
+                  <div id="ht-viral" class="hashtag-row"></div>
+                </div>
+                <div class="result-block">
+                  <h3>Niche Hashtags</h3>
+                  <div id="ht-niche" class="hashtag-row"></div>
+                </div>
+                <div class="result-block">
+                  <h3>Trend Hashtags</h3>
+                  <div id="ht-trend" class="hashtag-row"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="js/site-config.js"></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="js/google-signin.js" defer></script>
+    <script src="js/generator.js"></script>
+  </body>
+</html>
