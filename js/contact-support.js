@@ -17,6 +17,10 @@
     var openBtns = document.querySelectorAll("[data-contact-open]");
     var closeEls = document.querySelectorAll("[data-contact-close]");
     if (!modal || !form) return;
+    // Force a closed baseline state even if CSS caching is stale.
+    modal.hidden = true;
+    modal.setAttribute("aria-hidden", "true");
+    modal.style.display = "none";
 
     function setStatus(msg, ok) {
       if (!statusEl) return;
@@ -30,6 +34,8 @@
 
     function open() {
       modal.hidden = false;
+      modal.setAttribute("aria-hidden", "false");
+      modal.style.display = "grid";
       setStatus("", true);
       var nameEl = byId("contact-name");
       if (nameEl) nameEl.focus();
@@ -38,6 +44,8 @@
 
     function close() {
       modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
+      modal.style.display = "none";
       document.body.style.overflow = "";
     }
 
@@ -47,6 +55,13 @@
 
     closeEls.forEach(function (el) {
       el.addEventListener("click", close);
+    });
+    modal.addEventListener("click", function (e) {
+      var t = e && e.target ? e.target : null;
+      if (!t) return;
+      if (t === modal || (t.getAttribute && t.getAttribute("data-contact-close") != null)) {
+        close();
+      }
     });
 
     document.addEventListener("keydown", function (e) {
