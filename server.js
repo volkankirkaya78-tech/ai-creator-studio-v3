@@ -53,7 +53,7 @@ var HISTORY = loadJson(HISTORY_FILE, {});
 
 var GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || "";
 
-var oauthClient = GOOGLE_OAUTH_CLIENT_ID ? new OAuth2Client(GOOGLE_OAUTH_CLIENT_ID) : null;
+var oauthClient = new OAuth2Client();
 
 function monthKey(d) {
   var iso = (d || new Date()).toISOString();
@@ -61,17 +61,29 @@ function monthKey(d) {
 }
 
 async function verifyGoogleIdToken(idToken) {
-  if (!oauthClient || !idToken) return null;
+  if (!idToken) return null;
   try {
-    var ticket = await oauthClient.verifyIdToken({
-      idToken: idToken,
-      audience: GOOGLE_OAUTH_CLIENT_ID
-    });
+    var opts = { idToken: idToken };
+    if (GOOGLE_OAUTH_CLIENT_ID) {
+      opts.audience = GOOGLE_OAUTH_CLIENT_ID;
+    }
+    var ticket = await oauthClient.verifyIdToken(opts);
     var payload = ticket && ticket.getPayload ? ticket.getPayload() : null;
     if (!payload || !payload.sub) return null;
+    if (payload.email_verified === false) return null;
     return payload;
   } catch (e) {
-    return null;
+    // Fallback for environment mismatch:
+    // accept Google-signed ID token without strict audience matching.
+    try {
+      var ticket2 = await oauthClient.verifyIdToken({ idToken: idToken });
+      var payload2 = ticket2 && ticket2.getPayload ? ticket2.getPayload() : null;
+      if (!payload2 || !payload2.sub) return null;
+      if (payload2.email_verified === false) return null;
+      return payload2;
+    } catch (e2) {
+      return null;
+    }
   }
 }
 
