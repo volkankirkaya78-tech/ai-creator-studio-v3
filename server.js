@@ -58,6 +58,12 @@ var paidSubs = String(process.env.PAID_SUBS || "")
     return s.trim();
   })
   .filter(Boolean);
+var paidEmails = String(process.env.PAID_EMAILS || "")
+  .split(",")
+  .map(function (s) {
+    return s.trim().toLowerCase();
+  })
+  .filter(Boolean);
 
 var oauthClient = GOOGLE_OAUTH_CLIENT_ID ? new OAuth2Client(GOOGLE_OAUTH_CLIENT_ID) : null;
 
@@ -110,20 +116,62 @@ function normalizeEmail(email) {
     .toLowerCase();
 }
 
-function setPaidEmail(email, paid) {
-  var key = normalizeEmail(email);
-  if (!key) return;
-  if (!EMAIL_SUBSCRIPTIONS[key]) EMAIL_SUBSCRIPTIONS[key] = { createdAt: new Date().toISOString() };
-  EMAIL_SUBSCRIPTIONS[key].isPaid = Boolean(paid);
-  EMAIL_SUBSCRIPTIONS[key].updatedAt = new Date().toISOString();
-  saveJson(EMAIL_SUBSCRIPTIONS_FILE, EMAIL_SUBSCRIPTIONS);
-}
-
-function isPaidEmail(email) {
+function isPaidEmailFallback(email) {
   var key = normalizeEmail(email);
   if (!key) return false;
+  if (paidEmails.indexOf(key) >= 0) return true;
+  return false;
+}
+
+function getSubscriptionByEmail(email) {
+  var key = normalizeEmail(email);
+  if (!key) return null;
   var entry = EMAIL_SUBSCRIPTIONS[key];
-  return Boolean(entry && entry.isPaid);
+  if (entry && typeof entry === "object") return entry;
+  // Backward compatibility: old storage format was boolean isPaid.
+  if (typeof entry === "boolean") {
+    return upsertSubscriptionByEmail(key, {
+      paid: entry,
+      plan: entry ? "pro" : "free",
+      subscriptionStatus: entry ? "active" : "none",
+      expiryDate: null
+    });
+  }
+  return null;
+}
+
+function upsertSubscriptionByEmail(email, patch) {
+  var key = normalizeEmail(email);
+  if (!key) return null;
+  var now = new Date().toISOString();
+  var current = EMAIL_SUBSCRIPTIONS[key] || {
+    email: key,
+    plan: "free",
+    paid: false,
+    subscriptionStatus: "none",
+    expiryDate: null,
+    createdAt: now
+  };
+
+  var next = {
+    email: key,
+    plan: patch && patch.plan != null ? String(patch.plan) : String(current.plan || "free"),
+    paid: patch && patch.paid != null ? Boolean(patch.paid) : Boolean(current.paid),
+    subscriptionStatus:
+      patch && patch.subscriptionStatus != null
+        ? String(patch.subscriptionStatus)
+        : String(current.subscriptionStatus || "none"),
+    expiryDate:
+      patch && Object.prototype.hasOwnProperty.call(patch, "expiryDate")
+        ? patch.expiryDate || null
+        : current.expiryDate || null,
+    createdAt: current.createdAt || now,
+    updatedAt: now
+  };
+
+  EMAIL_SUBSCRIPTIONS[key] = next;
+  saveJson(EMAIL_SUBSCRIPTIONS_FILE, EMAIL_SUBSCRIPTIONS);
+  return next;
 }
 
 app.use(
@@ -209,8 +257,10 @@ app.post("/api/generate", upload.single("image"), async (req, res) => {
     const idToken = String(req.headers["x-google-id-token"] || "").trim();
     const payload = await verifyGoogleIdToken(idToken);
     const userSub = payload && payload.sub ? String(payload.sub) : null;
-
-    const isPaid = isPaidSub(userSub);
+    const userEmail = payload && payload.email ? String(payload.email) : "";
+    const subRecord = getSubscriptionByEmail(userEmail);
+    const isPaid =
+      Boolean(subRecord && subRecord.paid) || isPaidSub(userSub) || isPaidEmailFallback(userEmail);
     const freeLimit = Number(process.env.PACK_LIMIT_FREE || 10);
     const paidLimit = Number(process.env.PACK_LIMIT_PAID || 200);
     const anonLimit = Number(process.env.PACK_LIMIT_ANON || 3);
@@ -370,14 +420,27 @@ app.get("/api/me/status", async (req, res) => {
     var payload = await verifyGoogleIdToken(token);
     var sub = payload && payload.sub ? String(payload.sub) : "";
     var email = payload && payload.email ? String(payload.email) : "";
-    var paid = isPaidSub(sub) || isPaidEmail(email);
+    var rec = getSubscriptionByEmail(email);
+    var paid = Boolean(rec && rec.paid);
+    if (!paid) {
+      // Fallback only (manual override / emergency path)
+      paid = isPaidSub(sub) || isPaidEmailFallback(email);
+    }
     return res.json({
       signed_in: Boolean(sub),
       paid: Boolean(paid),
-      plan: paid ? "pro" : "free"
+      plan: rec && rec.plan ? rec.plan : paid ? "pro" : "free",
+      subscription_status: rec && rec.subscriptionStatus ? rec.subscriptionStatus : paid ? "active" : "none",
+      expiry_date: rec && Object.prototype.hasOwnProperty.call(rec, "expiryDate") ? rec.expiryDate : null
     });
   } catch (e) {
-    return res.json({ signed_in: false, paid: false, plan: "free" });
+    return res.json({
+      signed_in: false,
+      paid: false,
+      plan: "free",
+      subscription_status: "none",
+      expiry_date: null
+    });
   }
 });
 
@@ -399,7 +462,6 @@ app.post("/create-checkout", async (req, res) => {
     }
 
     var userSub = String(payload.sub);
-    var userEmail = payload && payload.email ? String(payload.email) : "";
     var userEmail = payload && payload.email ? String(payload.email) : "";
     var baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
     var redirectUrl = process.env.LEMONSQUEEZY_REDIRECT_URL || baseUrl + "/?upgrade=success";
@@ -491,6 +553,7 @@ app.post("/api/lemonsqueezy/create-checkout-session", async (req, res) => {
     }
 
     var userSub = String(payload.sub);
+    var userEmail = payload && payload.email ? String(payload.email) : "";
 
     var baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
     var redirectUrl = process.env.LEMONSQUEEZY_REDIRECT_URL || baseUrl + "/?upgrade=success";
@@ -604,17 +667,43 @@ app.post("/api/lemonsqueezy/webhook", async (req, res) => {
       custom.user_sub_id ||
       "";
     userSub = userSub ? String(userSub) : "";
-    if (!userSub) return res.json({ received: true });
 
+    var eventName =
+      (payload && payload.meta && payload.meta.event_name) ||
+      (req.headers["x-event-name"] ? String(req.headers["x-event-name"]) : "");
+    eventName = String(eventName || "").trim().toLowerCase();
     var dataType = payload && payload.data ? payload.data.type : "";
     var attrs = payload && payload.data && payload.data.attributes ? payload.data.attributes : {};
     var webhookEmail = attrs && attrs.user_email ? String(attrs.user_email) : "";
+    var expiry =
+      (attrs && (attrs.ends_at || attrs.renews_at || attrs.trial_ends_at)) || null;
 
-    if (dataType === "subscriptions") {
-      var status = attrs.status ? String(attrs.status) : "";
-      var paid = status && status !== "expired" && status !== "unpaid";
-      setPaidSub(userSub, Boolean(paid));
-      setPaidEmail(webhookEmail, Boolean(paid));
+    if (eventName === "subscription_created") {
+      if (userSub) setPaidSub(userSub, true);
+      upsertSubscriptionByEmail(webhookEmail, {
+        paid: true,
+        plan: "pro",
+        subscriptionStatus: "active",
+        expiryDate: expiry
+      });
+    } else if (eventName === "subscription_cancelled" || eventName === "subscription_expired") {
+      if (userSub) setPaidSub(userSub, false);
+      upsertSubscriptionByEmail(webhookEmail, {
+        paid: false,
+        plan: "free",
+        subscriptionStatus: eventName === "subscription_cancelled" ? "cancelled" : "expired",
+        expiryDate: expiry
+      });
+    } else if (eventName === "subscription_updated" && dataType === "subscriptions") {
+      var status = attrs.status ? String(attrs.status).toLowerCase() : "";
+      var paid = status === "active" || status === "on_trial" || status === "paused" || status === "past_due";
+      if (userSub) setPaidSub(userSub, Boolean(paid));
+      upsertSubscriptionByEmail(webhookEmail, {
+        paid: Boolean(paid),
+        plan: paid ? "pro" : "free",
+        subscriptionStatus: status || "updated",
+        expiryDate: expiry
+      });
     }
 
     return res.json({ received: true });
