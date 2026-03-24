@@ -1197,6 +1197,10 @@ section {
   place-items: center;
 }
 
+.contact-modal[hidden] {
+  display: none !important;
+}
+
 .contact-modal-backdrop {
   position: absolute;
   inset: 0;
