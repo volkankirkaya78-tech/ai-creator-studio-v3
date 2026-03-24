@@ -1177,6 +1177,13 @@ section {
   background: rgba(100, 116, 139, 0.16);
 }
 
+.home-plan-status {
+  max-width: 20rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Google Sign-In (GIS) */
 .google-auth-slot {
   display: flex;

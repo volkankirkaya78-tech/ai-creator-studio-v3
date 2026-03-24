@@ -27,6 +27,7 @@ try {
 
 const USAGE_FILE = path.join(DATA_DIR, "usage.json");
 const HISTORY_FILE = path.join(DATA_DIR, "history.json");
+const EMAIL_SUBSCRIPTIONS_FILE = path.join(DATA_DIR, "email-subscriptions.json");
 
 function loadJson(filePath, fallback) {
   try {
@@ -48,6 +49,7 @@ function saveJson(filePath, value) {
 
 var USAGE = loadJson(USAGE_FILE, {});
 var HISTORY = loadJson(HISTORY_FILE, {});
+var EMAIL_SUBSCRIPTIONS = loadJson(EMAIL_SUBSCRIPTIONS_FILE, {});
 
 var GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || "";
 var paidSubs = String(process.env.PAID_SUBS || "")
@@ -100,6 +102,28 @@ function setPaidSub(sub, paid) {
   SUBSCRIPTIONS[sub].isPaid = Boolean(paid);
   SUBSCRIPTIONS[sub].updatedAt = new Date().toISOString();
   saveJson(SUBSCRIPTIONS_FILE, SUBSCRIPTIONS);
+}
+
+function normalizeEmail(email) {
+  return String(email || "")
+    .trim()
+    .toLowerCase();
+}
+
+function setPaidEmail(email, paid) {
+  var key = normalizeEmail(email);
+  if (!key) return;
+  if (!EMAIL_SUBSCRIPTIONS[key]) EMAIL_SUBSCRIPTIONS[key] = { createdAt: new Date().toISOString() };
+  EMAIL_SUBSCRIPTIONS[key].isPaid = Boolean(paid);
+  EMAIL_SUBSCRIPTIONS[key].updatedAt = new Date().toISOString();
+  saveJson(EMAIL_SUBSCRIPTIONS_FILE, EMAIL_SUBSCRIPTIONS);
+}
+
+function isPaidEmail(email) {
+  var key = normalizeEmail(email);
+  if (!key) return false;
+  var entry = EMAIL_SUBSCRIPTIONS[key];
+  return Boolean(entry && entry.isPaid);
 }
 
 app.use(
@@ -345,7 +369,8 @@ app.get("/api/me/status", async (req, res) => {
     var token = String(req.headers["x-google-id-token"] || "").trim();
     var payload = await verifyGoogleIdToken(token);
     var sub = payload && payload.sub ? String(payload.sub) : "";
-    var paid = isPaidSub(sub);
+    var email = payload && payload.email ? String(payload.email) : "";
+    var paid = isPaidSub(sub) || isPaidEmail(email);
     return res.json({
       signed_in: Boolean(sub),
       paid: Boolean(paid),
@@ -374,6 +399,8 @@ app.post("/create-checkout", async (req, res) => {
     }
 
     var userSub = String(payload.sub);
+    var userEmail = payload && payload.email ? String(payload.email) : "";
+    var userEmail = payload && payload.email ? String(payload.email) : "";
     var baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
     var redirectUrl = process.env.LEMONSQUEEZY_REDIRECT_URL || baseUrl + "/?upgrade=success";
 
@@ -389,6 +416,7 @@ app.post("/create-checkout", async (req, res) => {
             redirect_url: redirectUrl
           },
           checkout_data: {
+            email: userEmail,
             custom: {
               user_sub: userSub
             }
@@ -479,6 +507,7 @@ app.post("/api/lemonsqueezy/create-checkout-session", async (req, res) => {
             redirect_url: redirectUrl
           },
           checkout_data: {
+            email: userEmail,
             custom: {
               user_sub: userSub
             }
@@ -579,11 +608,13 @@ app.post("/api/lemonsqueezy/webhook", async (req, res) => {
 
     var dataType = payload && payload.data ? payload.data.type : "";
     var attrs = payload && payload.data && payload.data.attributes ? payload.data.attributes : {};
+    var webhookEmail = attrs && attrs.user_email ? String(attrs.user_email) : "";
 
     if (dataType === "subscriptions") {
       var status = attrs.status ? String(attrs.status) : "";
       var paid = status && status !== "expired" && status !== "unpaid";
       setPaidSub(userSub, Boolean(paid));
+      setPaidEmail(webhookEmail, Boolean(paid));
     }
 
     return res.json({ received: true });

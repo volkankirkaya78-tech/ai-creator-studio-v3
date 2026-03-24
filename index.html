@@ -29,8 +29,9 @@
           <a href="#features">Features</a>
           <a href="#demo">Demo</a>
           <a href="#pricing">Pricing</a>
+          <span id="home-plan-status" class="plan-status-badge plan-free home-plan-status" hidden>Free plan</span>
           <div class="google-auth-slot" aria-label="Google account"></div>
-          <a href="tool.html" class="btn btn-primary">Create your first post</a>
+          <a href="tool.html" class="btn btn-primary js-home-primary-cta">Create your first post</a>
         </nav>
       </div>
     </header>
@@ -46,7 +47,7 @@
               captions, hashtags, a Reel script, and a viral score — ready for TikTok, Instagram, and YouTube Shorts.
             </p>
             <div class="hero-cta">
-              <a href="tool.html" class="btn btn-primary">Create your first post</a>
+              <a href="tool.html" class="btn btn-primary js-home-primary-cta">Create your first post</a>
               <a href="#demo" class="btn btn-ghost">See the demo</a>
             </div>
           </div>
@@ -504,7 +505,7 @@
           <div class="cta-band">
             <h2>Start creating viral-ready posts</h2>
             <p>Add a topic or a photo, pick your style, and generate. Everything runs in the browser for now — no install.</p>
-            <a href="tool.html" class="btn btn-primary">Create your first post</a>
+            <a href="tool.html" class="btn btn-primary js-home-primary-cta">Create your first post</a>
           </div>
         </div>
       </section>
@@ -548,6 +549,76 @@
               document.body.removeChild(ta);
             }
           });
+        });
+      })();
+
+      (function () {
+        var statusEl = document.getElementById("home-plan-status");
+        var ctas = document.querySelectorAll(".js-home-primary-cta");
+        if (!statusEl || !ctas.length) return;
+
+        function getToken() {
+          try {
+            return sessionStorage.getItem("acs_google_id_token") || "";
+          } catch (e) {
+            return "";
+          }
+        }
+
+        function getEmail() {
+          try {
+            var raw = sessionStorage.getItem("acs_google_user");
+            var user = raw ? JSON.parse(raw) : null;
+            return user && user.email ? String(user.email) : "";
+          } catch (e) {
+            return "";
+          }
+        }
+
+        function setCtaText(isPro) {
+          var txt = isPro ? "Start posting" : "Create your first post";
+          ctas.forEach(function (el) {
+            el.textContent = txt;
+          });
+        }
+
+        function applyStatus(signedIn, isPro) {
+          setCtaText(isPro);
+          if (!signedIn) {
+            statusEl.hidden = true;
+            return;
+          }
+          var email = getEmail();
+          statusEl.hidden = false;
+          statusEl.classList.remove("plan-pro", "plan-free");
+          if (isPro) {
+            statusEl.classList.add("plan-pro");
+            statusEl.textContent = email ? "Pro user 🚀 • " + email : "Pro user 🚀";
+          } else {
+            statusEl.classList.add("plan-free");
+            statusEl.textContent = email ? "Free plan • " + email : "Free plan";
+          }
+        }
+
+        function refreshPlan() {
+          var token = getToken();
+          if (!token) {
+            applyStatus(false, false);
+            return;
+          }
+          fetch("/api/me/status", { headers: { "x-google-id-token": token } })
+            .then(function (r) { return r.json().catch(function () { return {}; }); })
+            .then(function (d) {
+              applyStatus(Boolean(d && d.signed_in), Boolean(d && d.paid));
+            })
+            .catch(function () {
+              applyStatus(false, false);
+            });
+        }
+
+        refreshPlan();
+        window.addEventListener("acs-auth-changed", function () {
+          setTimeout(refreshPlan, 80);
         });
       })();
     </script>
