@@ -1498,6 +1498,12 @@
     }
 
     function applyPlanUi() {
+      try {
+        if (document && document.body) {
+          document.body.setAttribute("data-plan", isProUser ? "pro" : "free");
+        }
+        window.dispatchEvent(new CustomEvent("acs-plan-updated", { detail: { isPro: isProUser } }));
+      } catch (e) {}
       if (statusBadgeEl) {
         statusBadgeEl.classList.remove("plan-pro", "plan-free");
         if (isProUser) {
@@ -1799,8 +1805,54 @@
     var mobile = document.getElementById("mobile-panel-select");
     var styleWrap = document.getElementById("global-style-wrap");
     var globalBar = document.getElementById("tool-global-controls");
+    var isPro = false;
+
+    function canAccessPanel(id) {
+      if (id === "caption") return true;
+      return Boolean(isPro);
+    }
+
+    function tryUpgradeFromLock() {
+      var token = getGoogleIdToken();
+      var msg = "This tool is available on Pro. Upgrade to unlock it.";
+      if (!token) {
+        alert(msg + " Please sign in with Google first.");
+        return;
+      }
+      fetch("/create-checkout", {
+        method: "POST",
+        headers: { "x-google-id-token": token, "Content-Type": "application/json" },
+        body: JSON.stringify({})
+      })
+        .then(function (r) { return r.json().catch(function () { return {}; }); })
+        .then(function (d) {
+          if (d && d.url) {
+            window.location.href = d.url;
+            return;
+          }
+          alert((d && d.error) || "Upgrade failed. Please try again.");
+        })
+        .catch(function () {
+          alert("Upgrade failed. Please try again.");
+        });
+    }
+
+    function applyLocks() {
+      for (var i = 0; i < links.length; i++) {
+        var link = links[i];
+        var panelId = String(link.getAttribute("data-panel") || "");
+        var locked = !canAccessPanel(panelId);
+        link.classList.toggle("is-locked", locked);
+        link.setAttribute("aria-disabled", locked ? "true" : "false");
+      }
+    }
 
     function showPanel(id) {
+      if (!canAccessPanel(id)) {
+        showPanel("caption");
+        tryUpgradeFromLock();
+        return;
+      }
       for (var i = 0; i < panels.length; i++) {
         panels[i].classList.toggle("is-active", panels[i].id === "panel-" + id);
       }
@@ -1838,11 +1890,22 @@
     }
     if (mobile) {
       mobile.addEventListener("change", function () {
+        if (!canAccessPanel(mobile.value)) {
+          mobile.value = "caption";
+          showPanel("caption");
+          tryUpgradeFromLock();
+          return;
+        }
         showPanel(mobile.value);
       });
     }
+    window.addEventListener("acs-plan-updated", function (e) {
+      isPro = Boolean(e && e.detail && e.detail.isPro);
+      applyLocks();
+    });
     var hash = (typeof location !== "undefined" ? location.hash : "").replace(/^#/, "");
     var ids = ["viral-ideas", "hooks", "trends", "competitor", "caption", "hashtags"];
+    applyLocks();
     if (ids.indexOf(hash) >= 0) showPanel(hash);
     else showPanel("caption");
 

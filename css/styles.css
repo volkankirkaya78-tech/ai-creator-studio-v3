@@ -7,8 +7,8 @@
   --text-muted: #94a3c8;
   --primary: #6366f1;
   --primary-soft: rgba(99, 102, 241, 0.25);
-  --accent-start: #a855f7;
-  --accent-end: #3b82f6;
+  --accent-start: #0ea5e9;
+  --accent-end: #22d3ee;
   --success: #34d399;
   --border: rgba(148, 163, 184, 0.15);
   --radius: 14px;
@@ -1090,6 +1090,7 @@ section {
 .sidebar-nav a {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.65rem;
   padding: 0.65rem 0.85rem;
   border-radius: 10px;
@@ -1097,6 +1098,20 @@ section {
   font-size: 0.9rem;
   font-weight: 500;
   opacity: 0.85;
+}
+
+.lock-mark {
+  display: none;
+  font-size: 0.86rem;
+  opacity: 0.85;
+}
+
+body[data-plan="free"] .sidebar-nav a[data-pro-only="true"] .lock-mark {
+  display: inline-block;
+}
+
+body[data-plan="free"] .sidebar-nav a.is-locked {
+  opacity: 0.95;
 }
 
 .sidebar-nav a.active {
