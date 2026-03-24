@@ -1165,6 +1165,10 @@ section {
   border: 1px solid var(--border);
 }
 
+.plan-status-badge[hidden] {
+  display: none !important;
+}
+
 .plan-status-badge.plan-pro {
   color: #bbf7d0;
   border-color: rgba(34, 197, 94, 0.45);
