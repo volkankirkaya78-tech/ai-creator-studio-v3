@@ -1254,11 +1254,7 @@
 
   function getGoogleIdToken() {
     try {
-      return (
-        sessionStorage.getItem("acs_google_id_token") ||
-        (localStorage ? localStorage.getItem("acs_google_id_token") : "") ||
-        ""
-      );
+      return sessionStorage.getItem("acs_google_id_token") || "";
     } catch (e) {
       return "";
     }
@@ -1539,6 +1535,13 @@
 
     applyPlanUi();
     fetchPlanStatus();
+    if (typeof window !== "undefined") {
+      window.addEventListener("acs-auth-changed", function () {
+        lastHistoryItems = [];
+        if (historyListEl) historyListEl.innerHTML = "";
+        fetchPlanStatus();
+      });
+    }
 
     if (exportJsonBtn) exportJsonBtn.addEventListener("click", exportCurrentJson);
     if (exportTxtBtn) exportTxtBtn.addEventListener("click", exportCurrentTxt);

@@ -62,6 +62,7 @@
 
   function clearUser() {
     sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
     try {
       localStorage.removeItem(TOKEN_KEY);
     } catch (e) {}
@@ -79,7 +80,6 @@
         // Save raw token for backend usage (usage limits + history).
         try {
           sessionStorage.setItem(TOKEN_KEY, resp.credential);
-          localStorage.setItem(TOKEN_KEY, resp.credential);
         } catch (e) {}
         saveUser({
           name: p.name,
@@ -87,6 +87,9 @@
           picture: p.picture,
           sub: p.sub
         });
+        try {
+          window.dispatchEvent(new CustomEvent("acs-auth-changed", { detail: { signedIn: true } }));
+        } catch (e) {}
         document.querySelectorAll(".google-auth-slot").forEach(renderSlot);
       },
       auto_select: false,
@@ -123,6 +126,9 @@
       if (window.google && google.accounts && google.accounts.id) {
         google.accounts.id.disableAutoSelect();
       }
+      try {
+        window.dispatchEvent(new CustomEvent("acs-auth-changed", { detail: { signedIn: false } }));
+      } catch (e) {}
       document.querySelectorAll(".google-auth-slot").forEach(renderSlot);
     });
     bar.appendChild(out);
