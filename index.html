@@ -29,6 +29,7 @@
           <a href="#features">Features</a>
           <a href="#demo">Demo</a>
           <a href="#pricing">Pricing</a>
+          <button type="button" class="btn btn-ghost nav-contact-btn" data-contact-open>Contact</button>
           <span id="home-plan-status" class="plan-status-badge plan-free home-plan-status" hidden>Free plan</span>
           <div class="google-auth-slot" aria-label="Google account"></div>
           <a href="tool.html" class="btn btn-primary js-home-primary-cta">Create your first post</a>
@@ -516,6 +517,33 @@
         <p>© <span id="y"></span> AI Creator Studio. All rights reserved.</p>
       </div>
     </footer>
+
+    <div id="contact-modal" class="contact-modal" hidden>
+      <div class="contact-modal-backdrop" data-contact-close></div>
+      <div class="contact-modal-card" role="dialog" aria-modal="true" aria-labelledby="contact-title">
+        <button type="button" class="contact-close-btn" data-contact-close aria-label="Close">×</button>
+        <h3 id="contact-title">Contact / Support</h3>
+        <form id="contact-form" novalidate>
+          <input type="text" id="contact-website" name="website" class="hp-field" tabindex="-1" autocomplete="off" />
+          <div class="input-group">
+            <label for="contact-name">Name</label>
+            <input id="contact-name" class="input-text" type="text" required autocomplete="name" />
+          </div>
+          <div class="input-group">
+            <label for="contact-email">Email</label>
+            <input id="contact-email" class="input-text" type="email" required autocomplete="email" />
+          </div>
+          <div class="input-group">
+            <label for="contact-message">Message</label>
+            <textarea id="contact-message" rows="4" required></textarea>
+          </div>
+          <p id="contact-form-status" class="field-hint"></p>
+          <div class="generate-wrap">
+            <button id="contact-submit" type="submit" class="btn btn-primary btn-block">Send message</button>
+          </div>
+        </form>
+      </div>
+    </div>
     <script>
       document.getElementById("y").textContent = new Date().getFullYear();
 
@@ -625,5 +653,6 @@
     <script src="js/site-config.js"></script>
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="js/google-signin.js" defer></script>
+    <script src="js/contact-support.js" defer></script>
   </body>
 </html>
