@@ -637,16 +637,26 @@
           fetch("/api/me/status", { headers: { "x-google-id-token": token } })
             .then(function (r) { return r.json().catch(function () { return {}; }); })
             .then(function (d) {
-              applyStatus(Boolean(d && d.signed_in), Boolean(d && d.paid));
+              var isPro = Boolean(d && (d.paid || String(d.plan || "").toLowerCase() === "pro"));
+              var signedIn = Boolean(d && d.signed_in) || Boolean(token);
+              applyStatus(signedIn, isPro);
             })
             .catch(function () {
-              applyStatus(false, false);
+              // Keep user signed-in appearance if token exists; avoid flashing to free/offline state.
+              applyStatus(Boolean(token), false);
             });
         }
 
         refreshPlan();
         window.addEventListener("acs-auth-changed", function () {
           setTimeout(refreshPlan, 80);
+          setTimeout(refreshPlan, 1200);
+          setTimeout(refreshPlan, 3500);
+        });
+        window.addEventListener("focus", refreshPlan);
+        window.addEventListener("pageshow", refreshPlan);
+        document.addEventListener("visibilitychange", function () {
+          if (!document.hidden) refreshPlan();
         });
       })();
     </script>
