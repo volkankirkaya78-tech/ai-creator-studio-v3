@@ -7,9 +7,11 @@ const express = require("express");
 const multer = require("multer");
 const OpenAI = require("openai");
 const crypto = require("crypto");
+const nodemailer = require("nodemailer");
 const fs = require("fs");
 const path = require("path");
 const { OAuth2Client } = require("google-auth-library");
+const { createClient } = require("@supabase/supabase-js");
 
 const MAX_BYTES = 50 * 1024 * 1024;
 const upload = multer({
@@ -27,7 +29,6 @@ try {
 
 const USAGE_FILE = path.join(DATA_DIR, "usage.json");
 const HISTORY_FILE = path.join(DATA_DIR, "history.json");
-const EMAIL_SUBSCRIPTIONS_FILE = path.join(DATA_DIR, "email-subscriptions.json");
 
 function loadJson(filePath, fallback) {
   try {
@@ -49,21 +50,8 @@ function saveJson(filePath, value) {
 
 var USAGE = loadJson(USAGE_FILE, {});
 var HISTORY = loadJson(HISTORY_FILE, {});
-var EMAIL_SUBSCRIPTIONS = loadJson(EMAIL_SUBSCRIPTIONS_FILE, {});
 
 var GOOGLE_OAUTH_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || "";
-var paidSubs = String(process.env.PAID_SUBS || "")
-  .split(",")
-  .map(function (s) {
-    return s.trim();
-  })
-  .filter(Boolean);
-var paidEmails = String(process.env.PAID_EMAILS || "")
-  .split(",")
-  .map(function (s) {
-    return s.trim().toLowerCase();
-  })
-  .filter(Boolean);
 
 var oauthClient = GOOGLE_OAUTH_CLIENT_ID ? new OAuth2Client(GOOGLE_OAUTH_CLIENT_ID) : null;
 
@@ -87,27 +75,53 @@ async function verifyGoogleIdToken(idToken) {
   }
 }
 
-const SUBSCRIPTIONS_FILE = path.join(DATA_DIR, "subscriptions.json");
-var SUBSCRIPTIONS = loadJson(SUBSCRIPTIONS_FILE, {});
 
 var LEMONSQUEEZY_API_KEY = process.env.LEMONSQUEEZY_API_KEY || "";
 var LEMONSQUEEZY_STORE_ID = process.env.LEMONSQUEEZY_STORE_ID || "";
 var LEMONSQUEEZY_VARIANT_ID_MONTHLY = process.env.LEMONSQUEEZY_VARIANT_ID_MONTHLY || "";
 var LEMONSQUEEZY_WEBHOOK_SIGNING_SECRET = process.env.LEMONSQUEEZY_WEBHOOK_SIGNING_SECRET || "";
+var SUPABASE_URL = process.env.SUPABASE_URL || "";
+var SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+var supabase =
+  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+    : null;
 
-function isPaidSub(sub) {
-  if (!sub) return false;
-  if (paidSubs.indexOf(sub) >= 0) return true;
-  var entry = SUBSCRIPTIONS[sub];
-  return Boolean(entry && entry.isPaid);
+var CONTACT_TO_EMAIL = "volkan@maksshandle.com";
+var SMTP_HOST = process.env.SMTP_HOST || "";
+var SMTP_PORT = Number(process.env.SMTP_PORT || 587);
+var SMTP_SECURE = String(process.env.SMTP_SECURE || "false").toLowerCase() === "true";
+var SMTP_USER = process.env.SMTP_USER || "";
+var SMTP_PASS = process.env.SMTP_PASS || "";
+var SMTP_FROM = process.env.SMTP_FROM || SMTP_USER || "no-reply@ai-creator-studio.local";
+var CONTACT_RATE_LIMIT_MAX = 3;
+var CONTACT_RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+var CONTACT_RATE_LIMIT = {};
+
+function getMailerTransport() {
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return null;
+  return nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_SECURE,
+    auth: {
+      user: SMTP_USER,
+      pass: SMTP_PASS
+    }
+  });
 }
 
-function setPaidSub(sub, paid) {
-  if (!sub) return;
-  if (!SUBSCRIPTIONS[sub]) SUBSCRIPTIONS[sub] = { createdAt: new Date().toISOString() };
-  SUBSCRIPTIONS[sub].isPaid = Boolean(paid);
-  SUBSCRIPTIONS[sub].updatedAt = new Date().toISOString();
-  saveJson(SUBSCRIPTIONS_FILE, SUBSCRIPTIONS);
+function isContactRateLimited(ip) {
+  var key = String(ip || "unknown");
+  var now = Date.now();
+  var row = CONTACT_RATE_LIMIT[key];
+  if (!row || now - row.startAt > CONTACT_RATE_LIMIT_WINDOW_MS) {
+    CONTACT_RATE_LIMIT[key] = { startAt: now, count: 1 };
+    return false;
+  }
+  row.count += 1;
+  CONTACT_RATE_LIMIT[key] = row;
+  return row.count > CONTACT_RATE_LIMIT_MAX;
 }
 
 function normalizeEmail(email) {
@@ -116,62 +130,65 @@ function normalizeEmail(email) {
     .toLowerCase();
 }
 
-function isPaidEmailFallback(email) {
-  var key = normalizeEmail(email);
-  if (!key) return false;
-  if (paidEmails.indexOf(key) >= 0) return true;
-  return false;
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
-function getSubscriptionByEmail(email) {
+async function getSubscriptionByEmail(email) {
   var key = normalizeEmail(email);
   if (!key) return null;
-  var entry = EMAIL_SUBSCRIPTIONS[key];
-  if (entry && typeof entry === "object") return entry;
-  // Backward compatibility: old storage format was boolean isPaid.
-  if (typeof entry === "boolean") {
-    return upsertSubscriptionByEmail(key, {
-      paid: entry,
-      plan: entry ? "pro" : "free",
-      subscriptionStatus: entry ? "active" : "none",
-      expiryDate: null
-    });
-  }
-  return null;
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from("users")
+    .select("email, plan, paid, subscription_status, expiry_date, updated_at")
+    .eq("email", key)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    email: data.email,
+    plan: data.plan,
+    paid: Boolean(data.paid),
+    subscriptionStatus: data.subscription_status || "none",
+    expiryDate: data.expiry_date || null,
+    updatedAt: data.updated_at || null
+  };
 }
 
-function upsertSubscriptionByEmail(email, patch) {
+async function upsertSubscriptionByEmail(email, patch) {
   var key = normalizeEmail(email);
   if (!key) return null;
+  if (!supabase) return null;
   var now = new Date().toISOString();
-  var current = EMAIL_SUBSCRIPTIONS[key] || {
+  var payload = {
     email: key,
-    plan: "free",
-    paid: false,
-    subscriptionStatus: "none",
-    expiryDate: null,
-    createdAt: now
+    plan: patch && patch.plan != null ? String(patch.plan) : "free",
+    paid: patch && patch.paid != null ? Boolean(patch.paid) : false,
+    subscription_status:
+      patch && patch.subscriptionStatus != null ? String(patch.subscriptionStatus) : "none",
+    expiry_date:
+      patch && Object.prototype.hasOwnProperty.call(patch, "expiryDate") ? patch.expiryDate || null : null,
+    updated_at: now
   };
-
-  var next = {
-    email: key,
-    plan: patch && patch.plan != null ? String(patch.plan) : String(current.plan || "free"),
-    paid: patch && patch.paid != null ? Boolean(patch.paid) : Boolean(current.paid),
-    subscriptionStatus:
-      patch && patch.subscriptionStatus != null
-        ? String(patch.subscriptionStatus)
-        : String(current.subscriptionStatus || "none"),
-    expiryDate:
-      patch && Object.prototype.hasOwnProperty.call(patch, "expiryDate")
-        ? patch.expiryDate || null
-        : current.expiryDate || null,
-    createdAt: current.createdAt || now,
-    updatedAt: now
+  const { data, error } = await supabase
+    .from("users")
+    .upsert(payload, { onConflict: "email" })
+    .select("email, plan, paid, subscription_status, expiry_date, updated_at")
+    .single();
+  if (error) throw error;
+  return {
+    email: data.email,
+    plan: data.plan,
+    paid: Boolean(data.paid),
+    subscriptionStatus: data.subscription_status || "none",
+    expiryDate: data.expiry_date || null,
+    updatedAt: data.updated_at || null
   };
-
-  EMAIL_SUBSCRIPTIONS[key] = next;
-  saveJson(EMAIL_SUBSCRIPTIONS_FILE, EMAIL_SUBSCRIPTIONS);
-  return next;
 }
 
 app.use(
@@ -258,9 +275,8 @@ app.post("/api/generate", upload.single("image"), async (req, res) => {
     const payload = await verifyGoogleIdToken(idToken);
     const userSub = payload && payload.sub ? String(payload.sub) : null;
     const userEmail = payload && payload.email ? String(payload.email) : "";
-    const subRecord = getSubscriptionByEmail(userEmail);
-    const isPaid =
-      Boolean(subRecord && subRecord.paid) || isPaidSub(userSub) || isPaidEmailFallback(userEmail);
+    const subRecord = await getSubscriptionByEmail(userEmail);
+    const isPaid = Boolean(subRecord && subRecord.paid);
     const freeLimit = Number(process.env.PACK_LIMIT_FREE || 10);
     const paidLimit = Number(process.env.PACK_LIMIT_PAID || 200);
     const anonLimit = Number(process.env.PACK_LIMIT_ANON || 3);
@@ -420,12 +436,8 @@ app.get("/api/me/status", async (req, res) => {
     var payload = await verifyGoogleIdToken(token);
     var sub = payload && payload.sub ? String(payload.sub) : "";
     var email = payload && payload.email ? String(payload.email) : "";
-    var rec = getSubscriptionByEmail(email);
+    var rec = await getSubscriptionByEmail(email);
     var paid = Boolean(rec && rec.paid);
-    if (!paid) {
-      // Fallback only (manual override / emergency path)
-      paid = isPaidSub(sub) || isPaidEmailFallback(email);
-    }
     return res.json({
       signed_in: Boolean(sub),
       paid: Boolean(paid),
@@ -441,6 +453,81 @@ app.get("/api/me/status", async (req, res) => {
       subscription_status: "none",
       expiry_date: null
     });
+  }
+});
+
+app.post("/api/contact", async (req, res) => {
+  try {
+    if (isContactRateLimited(req.ip)) {
+      return res.status(429).json({ error: "Too many requests, try later" });
+    }
+
+    var website = String((req.body && req.body.website) || "").trim();
+    var name = String((req.body && req.body.name) || "").trim();
+    var email = String((req.body && req.body.email) || "").trim();
+    var message = String((req.body && req.body.message) || "").trim();
+
+    if (website) {
+      return res.status(400).json({ error: "Invalid submission" });
+    }
+
+    if (!name || !email || !message) {
+      return res.status(400).json({ error: "Invalid submission" });
+    }
+    if (name.length > 120 || email.length > 200 || message.length > 5000) {
+      return res.status(400).json({ error: "Invalid submission" });
+    }
+    if (message.length < 10) {
+      return res.status(400).json({ error: "Invalid submission" });
+    }
+
+    var emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if (!emailOk) {
+      return res.status(400).json({ error: "Invalid submission" });
+    }
+
+    var transport = getMailerTransport();
+    if (!transport) {
+      return res.status(503).json({
+        error: "Support inbox is not configured yet.",
+        detail: "Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, and SMTP_FROM."
+      });
+    }
+
+    await transport.sendMail({
+      from: SMTP_FROM,
+      to: CONTACT_TO_EMAIL,
+      replyTo: email,
+      subject: "AI Creator Studio Support Message",
+      text:
+        "New support message\n\n" +
+        "Name: " +
+        name +
+        "\n" +
+        "Email: " +
+        email +
+        "\n\n" +
+        "Message:\n" +
+        message +
+        "\n",
+      html:
+        "<h2>AI Creator Studio Support Message</h2>" +
+        "<p><strong>Name:</strong> " +
+        escapeHtml(name) +
+        "</p>" +
+        "<p><strong>Email:</strong> " +
+        escapeHtml(email) +
+        "</p>" +
+        "<p><strong>Message:</strong></p>" +
+        "<pre style=\"white-space:pre-wrap;font-family:inherit\">" +
+        escapeHtml(message) +
+        "</pre>"
+    });
+
+    return res.json({ ok: true });
+  } catch (e) {
+    console.error("Contact form error:", e && e.message ? e.message : e);
+    return res.status(500).json({ error: "Message could not be sent. Please try again." });
   }
 });
 
@@ -658,16 +745,6 @@ app.post("/api/lemonsqueezy/webhook", async (req, res) => {
       return res.status(400).json({ error: "Invalid webhook JSON" });
     }
 
-    var custom = (payload && payload.meta && payload.meta.custom_data) || {};
-    var userSub =
-      custom.user_sub ||
-      custom.userSub ||
-      custom.user_id ||
-      custom.userId ||
-      custom.user_sub_id ||
-      "";
-    userSub = userSub ? String(userSub) : "";
-
     var eventName =
       (payload && payload.meta && payload.meta.event_name) ||
       (req.headers["x-event-name"] ? String(req.headers["x-event-name"]) : "");
@@ -679,16 +756,14 @@ app.post("/api/lemonsqueezy/webhook", async (req, res) => {
       (attrs && (attrs.ends_at || attrs.renews_at || attrs.trial_ends_at)) || null;
 
     if (eventName === "subscription_created") {
-      if (userSub) setPaidSub(userSub, true);
-      upsertSubscriptionByEmail(webhookEmail, {
+      await upsertSubscriptionByEmail(webhookEmail, {
         paid: true,
         plan: "pro",
         subscriptionStatus: "active",
         expiryDate: expiry
       });
     } else if (eventName === "subscription_cancelled" || eventName === "subscription_expired") {
-      if (userSub) setPaidSub(userSub, false);
-      upsertSubscriptionByEmail(webhookEmail, {
+      await upsertSubscriptionByEmail(webhookEmail, {
         paid: false,
         plan: "free",
         subscriptionStatus: eventName === "subscription_cancelled" ? "cancelled" : "expired",
@@ -697,8 +772,7 @@ app.post("/api/lemonsqueezy/webhook", async (req, res) => {
     } else if (eventName === "subscription_updated" && dataType === "subscriptions") {
       var status = attrs.status ? String(attrs.status).toLowerCase() : "";
       var paid = status === "active" || status === "on_trial" || status === "paused" || status === "past_due";
-      if (userSub) setPaidSub(userSub, Boolean(paid));
-      upsertSubscriptionByEmail(webhookEmail, {
+      await upsertSubscriptionByEmail(webhookEmail, {
         paid: Boolean(paid),
         plan: paid ? "pro" : "free",
         subscriptionStatus: status || "updated",
