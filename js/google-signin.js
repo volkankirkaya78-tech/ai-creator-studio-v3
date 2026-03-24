@@ -123,11 +123,31 @@
     out.textContent = "Sign out";
     out.addEventListener("click", function () {
       clearUser();
+      // Immediately hide plan badges so UI updates without page refresh.
+      try {
+        var toolBadge = document.getElementById("plan-status-badge");
+        if (toolBadge) {
+          toolBadge.hidden = true;
+          toolBadge.classList.remove("plan-pro");
+          toolBadge.classList.add("plan-free");
+          toolBadge.textContent = "Free plan";
+        }
+        var homeBadge = document.getElementById("home-plan-status");
+        if (homeBadge) {
+          homeBadge.hidden = true;
+          homeBadge.classList.remove("plan-pro");
+          homeBadge.classList.add("plan-free");
+          homeBadge.textContent = "Free plan";
+        }
+      } catch (e) {}
       if (window.google && google.accounts && google.accounts.id) {
         google.accounts.id.disableAutoSelect();
       }
       try {
         window.dispatchEvent(new CustomEvent("acs-auth-changed", { detail: { signedIn: false } }));
+      } catch (e) {}
+      try {
+        document.dispatchEvent(new CustomEvent("acs-auth-changed", { detail: { signedIn: false } }));
       } catch (e) {}
       document.querySelectorAll(".google-auth-slot").forEach(renderSlot);
     });
