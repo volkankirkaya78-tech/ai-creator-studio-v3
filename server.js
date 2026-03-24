@@ -340,6 +340,22 @@ app.get("/api/history", async (req, res) => {
   }
 });
 
+app.get("/api/me/status", async (req, res) => {
+  try {
+    var token = String(req.headers["x-google-id-token"] || "").trim();
+    var payload = await verifyGoogleIdToken(token);
+    var sub = payload && payload.sub ? String(payload.sub) : "";
+    var paid = isPaidSub(sub);
+    return res.json({
+      signed_in: Boolean(sub),
+      paid: Boolean(paid),
+      plan: paid ? "pro" : "free"
+    });
+  } catch (e) {
+    return res.json({ signed_in: false, paid: false, plan: "free" });
+  }
+});
+
 // Frontend: /create-checkout (no API prefix).
 // Creates a Lemon Squeezy checkout URL (Pro). API key is only used server-side.
 app.post("/create-checkout", async (req, res) => {
@@ -863,6 +879,15 @@ function padHashtags(arr, n) {
 }
 
 app.use(express.static(root));
+
+// Payment return routes (Lemon Squeezy redirect target)
+app.get("/success", function (req, res) {
+  return res.redirect("/tool.html?upgrade=success");
+});
+
+app.get("/cancel", function (req, res) {
+  return res.redirect("/tool.html?upgrade=cancel");
+});
 
 const PORT = Number(process.env.PORT) || 3000;
 app.listen(PORT, () => {

@@ -1485,9 +1485,11 @@
     var historyExportBtn = document.getElementById("history-export-json");
     var historyListEl = document.getElementById("pack-history-list");
     var historyHintEl = document.getElementById("pack-history-hint");
+    var statusBadgeEl = document.getElementById("plan-status-badge");
 
     var lastPackData = null;
     var lastHistoryItems = [];
+    var isProUser = false;
 
     function setHistoryHint(msg) {
       if (!historyHintEl) return;
@@ -1497,6 +1499,46 @@
       }
       historyHintEl.textContent = msg;
     }
+
+    function applyPlanUi() {
+      if (statusBadgeEl) {
+        statusBadgeEl.classList.remove("plan-pro", "plan-free");
+        if (isProUser) {
+          statusBadgeEl.classList.add("plan-pro");
+          statusBadgeEl.textContent = "Pro user 🚀";
+        } else {
+          statusBadgeEl.classList.add("plan-free");
+          statusBadgeEl.textContent = "Free plan";
+        }
+      }
+      if (historyLoadBtn) historyLoadBtn.disabled = !isProUser;
+      if (historyExportBtn) historyExportBtn.disabled = !isProUser;
+      if (!isProUser) {
+        setHistoryHint("Upgrade to Pro to access history.");
+      } else if (!lastHistoryItems.length) {
+        setHistoryHint("Load recent to fetch your saved generations.");
+      }
+    }
+
+    function fetchPlanStatus() {
+      var token = getGoogleIdToken();
+      var headers = token ? { "x-google-id-token": token } : {};
+      return fetch("/api/me/status", { headers: headers })
+        .then(function (r) { return r.json().catch(function () { return {}; }); })
+        .then(function (d) {
+          isProUser = Boolean(d && d.paid);
+          applyPlanUi();
+          return isProUser;
+        })
+        .catch(function () {
+          isProUser = false;
+          applyPlanUi();
+          return false;
+        });
+    }
+
+    applyPlanUi();
+    fetchPlanStatus();
 
     if (exportJsonBtn) exportJsonBtn.addEventListener("click", exportCurrentJson);
     if (exportTxtBtn) exportTxtBtn.addEventListener("click", exportCurrentTxt);
@@ -1539,9 +1581,13 @@
 
     if (historyLoadBtn) {
       historyLoadBtn.addEventListener("click", function () {
+        if (!isProUser) {
+          setHistoryHint("Upgrade to Pro to access history.");
+          return;
+        }
         var token = getGoogleIdToken();
         if (!token) {
-          setHistoryHint("Sign in with Google to load your saved generations.");
+          setHistoryHint("Please sign in and upgrade to Pro to access history.");
           if (formError) showFormError(formError, "Please sign in to load history.");
           return;
         }
@@ -1594,6 +1640,10 @@
 
     if (historyExportBtn) {
       historyExportBtn.addEventListener("click", function () {
+        if (!isProUser) {
+          setHistoryHint("Upgrade to Pro to access history.");
+          return;
+        }
         if (!lastHistoryItems || !lastHistoryItems.length) {
           setHistoryHint("No history to export yet.");
           return;
@@ -2364,6 +2414,9 @@
       var v = (url.searchParams.get("upgrade") || "").toLowerCase();
       if (v === "success") {
         banner.hidden = false;
+        setTimeout(function () {
+          if (banner) banner.hidden = true;
+        }, 3000);
         // Keep URL clean after showing message once.
         url.searchParams.delete("upgrade");
         if (window.history && window.history.replaceState) {
