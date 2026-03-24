@@ -1917,13 +1917,21 @@ body[data-plan="free"] .sidebar-nav a.is-locked {
 
 .btn-upload-primary {
   background: linear-gradient(135deg, var(--accent-start), var(--accent-end));
-  color: #fff;
+  color: #06243a;
+  font-weight: 800;
+  letter-spacing: 0.01em;
   border-color: transparent;
-  box-shadow: 0 10px 28px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 10px 28px rgba(14, 165, 233, 0.35);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
 .btn-upload-primary:hover {
-  box-shadow: 0 14px 34px rgba(168, 85, 247, 0.4);
+  box-shadow: 0 14px 34px rgba(34, 211, 238, 0.38);
+}
+
+.btn-upload-primary .btn-upload-icon {
+  opacity: 1;
+  color: #06243a;
 }
 
 .btn-upload-secondary {
