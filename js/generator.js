@@ -2356,9 +2356,27 @@
     });
   }
 
+  function initUpgradeSuccessBanner() {
+    var banner = document.getElementById("upgrade-success-banner");
+    if (!banner) return;
+    try {
+      var url = new URL(window.location.href);
+      var v = (url.searchParams.get("upgrade") || "").toLowerCase();
+      if (v === "success") {
+        banner.hidden = false;
+        // Keep URL clean after showing message once.
+        url.searchParams.delete("upgrade");
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, "", url.pathname + (url.search ? url.search : "") + (url.hash || ""));
+        }
+      }
+    } catch (e) {}
+  }
+
   function initAllToolUi() {
     var showPanel = initSidebarNavigation();
     window.AICreatorStudioShowPanel = showPanel;
+    initUpgradeSuccessBanner();
     initToolPage();
     initViralIdeasPanel(showPanel);
     initHooksPanel(showPanel);
