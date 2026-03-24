@@ -503,6 +503,39 @@ app.get("/api/me/status", async (req, res) => {
   }
 });
 
+app.get("/api/me/debug-status", async (req, res) => {
+  try {
+    var token = String(req.headers["x-google-id-token"] || "").trim();
+    var payload = await verifyGoogleIdToken(token);
+    var sub = payload && payload.sub ? String(payload.sub) : "";
+    var email = normalizeEmail(payload && payload.email ? String(payload.email) : "");
+    var rec = null;
+    var dbError = null;
+    try {
+      rec = await getSubscriptionByEmail(email);
+    } catch (err) {
+      dbError = err && err.message ? String(err.message) : "unknown_db_error";
+    }
+    return res.json({
+      signed_in: Boolean(sub),
+      token_email: email || null,
+      supabase_configured: Boolean(supabase),
+      record_found: Boolean(rec),
+      record: rec || null,
+      db_error: dbError
+    });
+  } catch (e) {
+    return res.json({
+      signed_in: false,
+      token_email: null,
+      supabase_configured: Boolean(supabase),
+      record_found: false,
+      record: null,
+      db_error: e && e.message ? String(e.message) : "token_verify_failed"
+    });
+  }
+});
+
 app.post("/api/contact", async (req, res) => {
   try {
     if (isContactRateLimited(req.ip)) {
