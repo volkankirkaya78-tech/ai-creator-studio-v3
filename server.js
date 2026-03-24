@@ -111,6 +111,22 @@ function getMailerTransport() {
   });
 }
 
+async function lemonApiGet(pathWithQuery) {
+  if (!LEMONSQUEEZY_API_KEY) return null;
+  var r = await fetch("https://api.lemonsqueezy.com/v1/" + pathWithQuery, {
+    method: "GET",
+    headers: {
+      Accept: "application/vnd.api+json",
+      Authorization: "Bearer " + String(LEMONSQUEEZY_API_KEY)
+    }
+  });
+  var j = null;
+  try {
+    j = await r.json();
+  } catch (e) {}
+  return { ok: Boolean(r.ok), status: r.status, body: j };
+}
+
 function isContactRateLimited(ip) {
   var key = String(ip || "unknown");
   var now = Date.now();
@@ -143,17 +159,15 @@ async function getSubscriptionByEmail(email) {
   var key = normalizeEmail(email);
   if (!key) return null;
   if (!supabase) return null;
-  const { data, error } = await supabase
-    .from("users")
-    .select("email, plan, paid, subscription_status, expiry_date, updated_at")
-    .eq("email", key)
-    .maybeSingle();
+  const { data, error } = await supabase.from("users").select("*").eq("email", key).maybeSingle();
   if (error) throw error;
   if (!data) return null;
+  var plan = String(data.plan || "free").toLowerCase();
+  var paid = data.paid != null ? Boolean(data.paid) : plan === "pro";
   return {
     email: data.email,
-    plan: data.plan,
-    paid: Boolean(data.paid),
+    plan: plan,
+    paid: paid,
     subscriptionStatus: data.subscription_status || "none",
     expiryDate: data.expiry_date || null,
     updatedAt: data.updated_at || null
@@ -165,26 +179,47 @@ async function upsertSubscriptionByEmail(email, patch) {
   if (!key) return null;
   if (!supabase) return null;
   var now = new Date().toISOString();
+  var plan = patch && patch.plan != null ? String(patch.plan).toLowerCase() : "free";
   var payload = {
     email: key,
-    plan: patch && patch.plan != null ? String(patch.plan) : "free",
-    paid: patch && patch.paid != null ? Boolean(patch.paid) : false,
+    plan: plan,
+    paid: patch && patch.paid != null ? Boolean(patch.paid) : plan === "pro",
     subscription_status:
       patch && patch.subscriptionStatus != null ? String(patch.subscriptionStatus) : "none",
     expiry_date:
       patch && Object.prototype.hasOwnProperty.call(patch, "expiryDate") ? patch.expiryDate || null : null,
     updated_at: now
   };
-  const { data, error } = await supabase
-    .from("users")
-    .upsert(payload, { onConflict: "email" })
-    .select("email, plan, paid, subscription_status, expiry_date, updated_at")
-    .single();
+  var data = null;
+  var error = null;
+  var first = await supabase.from("users").upsert(payload, { onConflict: "email" }).select("*").single();
+  data = first.data;
+  error = first.error;
+  if (error && /paid/i.test(String(error.message || ""))) {
+    var fallbackPayload = {
+      email: key,
+      plan: plan,
+      subscription_status:
+        patch && patch.subscriptionStatus != null ? String(patch.subscriptionStatus) : "none",
+      expiry_date:
+        patch && Object.prototype.hasOwnProperty.call(patch, "expiryDate") ? patch.expiryDate || null : null,
+      updated_at: now
+    };
+    var second = await supabase
+      .from("users")
+      .upsert(fallbackPayload, { onConflict: "email" })
+      .select("*")
+      .single();
+    data = second.data;
+    error = second.error;
+  }
   if (error) throw error;
+  var outPlan = String((data && data.plan) || plan || "free").toLowerCase();
+  var outPaid = data && data.paid != null ? Boolean(data.paid) : outPlan === "pro";
   return {
     email: data.email,
-    plan: data.plan,
-    paid: Boolean(data.paid),
+    plan: outPlan,
+    paid: outPaid,
     subscriptionStatus: data.subscription_status || "none",
     expiryDate: data.expiry_date || null,
     updatedAt: data.updated_at || null
@@ -528,6 +563,73 @@ app.post("/api/contact", async (req, res) => {
   } catch (e) {
     console.error("Contact form error:", e && e.message ? e.message : e);
     return res.status(500).json({ error: "Message could not be sent. Please try again." });
+  }
+});
+
+app.post("/api/subscription/reconcile", async (req, res) => {
+  try {
+    var token = String(req.headers["x-google-id-token"] || "").trim();
+    var payload = await verifyGoogleIdToken(token);
+    if (!payload || !payload.sub) {
+      return res.status(401).json({ error: "Sign in required" });
+    }
+    var email = normalizeEmail(payload.email || "");
+    if (!email) {
+      return res.status(400).json({ error: "Email is required for reconciliation." });
+    }
+    if (!supabase) {
+      return res.status(503).json({ error: "Supabase is not configured." });
+    }
+
+    var enc = encodeURIComponent(email);
+    var subsResp = await lemonApiGet("subscriptions?filter[user_email]=" + enc + "&page[size]=10");
+    if (!subsResp || !subsResp.ok) {
+      return res.status(502).json({ error: "Lemon subscription check failed." });
+    }
+    var subscriptions = subsResp.body;
+    var paid = false;
+    var subStatus = "none";
+    var expiryDate = null;
+    if (subscriptions && Array.isArray(subscriptions.data)) {
+      for (var i = 0; i < subscriptions.data.length; i++) {
+        var s = subscriptions.data[i] || {};
+        var a = s.attributes || {};
+        var st = String(a.status || "").toLowerCase();
+        if (st === "active" || st === "on_trial" || st === "past_due" || st === "paused") {
+          paid = true;
+          subStatus = st || "active";
+          expiryDate = a.ends_at || a.renews_at || a.trial_ends_at || null;
+          break;
+        }
+      }
+    }
+
+    if (!paid) {
+      return res.status(404).json({
+        error: "No active subscription found for this account.",
+        paid: false,
+        plan: "free",
+        subscription_status: "none"
+      });
+    }
+
+    var rec = await upsertSubscriptionByEmail(email, {
+      paid: true,
+      plan: "pro",
+      subscriptionStatus: subStatus,
+      expiryDate: expiryDate
+    });
+
+    return res.json({
+      ok: true,
+      paid: Boolean(rec && rec.paid),
+      plan: rec && rec.plan ? rec.plan : "pro",
+      subscription_status: rec && rec.subscriptionStatus ? rec.subscriptionStatus : subStatus,
+      expiry_date: rec && rec.expiryDate ? rec.expiryDate : expiryDate
+    });
+  } catch (e) {
+    console.error("Reconcile error:", e && e.message ? e.message : e);
+    return res.status(500).json({ error: "Reconciliation failed." });
   }
 });
 

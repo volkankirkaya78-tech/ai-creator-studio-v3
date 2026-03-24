@@ -1482,6 +1482,7 @@
     var historyListEl = document.getElementById("pack-history-list");
     var historyHintEl = document.getElementById("pack-history-hint");
     var statusBadgeEl = document.getElementById("plan-status-badge");
+    var restoreProBtn = document.getElementById("restore-pro-btn");
 
     var lastPackData = null;
     var lastHistoryItems = [];
@@ -1509,6 +1510,7 @@
       }
       if (historyLoadBtn) historyLoadBtn.disabled = !isProUser;
       if (historyExportBtn) historyExportBtn.disabled = !isProUser;
+      if (restoreProBtn) restoreProBtn.hidden = Boolean(isProUser);
       if (!isProUser) {
         setHistoryHint("Upgrade to Pro to access history.");
       } else if (!lastHistoryItems.length) {
@@ -1578,6 +1580,48 @@
             upgradeBtn.disabled = false;
             upgradeBtn.textContent = orig;
             showFormError(formError, "Upgrade failed. Try again in a moment.");
+          });
+      });
+    }
+
+    if (restoreProBtn) {
+      restoreProBtn.addEventListener("click", function () {
+        var token = getGoogleIdToken();
+        if (!token) {
+          showFormError(formError, "Please sign in with Google first.");
+          return;
+        }
+        var orig = restoreProBtn.textContent;
+        restoreProBtn.disabled = true;
+        restoreProBtn.textContent = "Checking…";
+        fetch("/api/subscription/reconcile", {
+          method: "POST",
+          headers: { "x-google-id-token": token }
+        })
+          .then(function (r) {
+            return r.json().catch(function () { return {}; }).then(function (d) {
+              return { ok: r.ok, body: d };
+            });
+          })
+          .then(function (res) {
+            restoreProBtn.disabled = false;
+            restoreProBtn.textContent = orig;
+            if (res.ok && res.body && res.body.paid) {
+              isProUser = true;
+              applyPlanUi();
+              showFormError(formError, "");
+              setHistoryHint("Pro access restored.");
+              return;
+            }
+            showFormError(
+              formError,
+              (res.body && res.body.error) || "No active subscription found for this account."
+            );
+          })
+          .catch(function () {
+            restoreProBtn.disabled = false;
+            restoreProBtn.textContent = orig;
+            showFormError(formError, "Restore failed. Please try again.");
           });
       });
     }
@@ -2417,6 +2461,28 @@
       var v = (url.searchParams.get("upgrade") || "").toLowerCase();
       if (v === "success") {
         banner.hidden = false;
+        var refreshPlanUi = function () {
+          try {
+            document.dispatchEvent(new CustomEvent("acs-auth-changed"));
+          } catch (e) {}
+        };
+        try {
+          var token = getGoogleIdToken();
+          if (token) {
+            fetch("/api/subscription/reconcile", {
+              method: "POST",
+              headers: {
+                "x-google-id-token": token
+              }
+            })
+              .then(function () {
+                refreshPlanUi();
+                setTimeout(refreshPlanUi, 1500);
+                setTimeout(refreshPlanUi, 4000);
+              })
+              .catch(function () {});
+          }
+        } catch (e) {}
         setTimeout(function () {
           if (banner) banner.hidden = true;
         }, 3000);
